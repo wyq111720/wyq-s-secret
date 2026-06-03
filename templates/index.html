@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>专属选题管家</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="main-panel">
+      <header class="browser-bar">
+        <div class="traffic"><span></span><span></span><span></span></div>
+        <div class="address">your.topic.butler</div>
+        <div class="bar-actions">智能记忆已开启</div>
+      </header>
+
+      <section class="hero">
+        <div>
+          <span class="eyebrow">Topic Butler AI</span>
+          <h1>你的专属选题管家</h1>
+          <p>告诉我你的专业、方向和论文类型。我会结合你之前问过的内容，帮你拆出可写、可查、可展示的选题。</p>
+        </div>
+        <div class="agent-card">
+          <div class="agent-glow"></div>
+          <div class="agent-face">
+            <div class="hair"></div>
+            <div class="eye left"></div>
+            <div class="eye right"></div>
+            <div class="smile"></div>
+          </div>
+          <div class="agent-body"><span>AI</span></div>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <form id="topicForm" class="input-card">
+          <div class="section-title">
+            <h2>选题信息</h2>
+            <p>建议写得具体一点，例如“新闻传播 + AIGC + 短视频”。再次提问时，我会参考右侧的历史记忆。</p>
+          </div>
+
+          <div class="preset-row">
+            <button type="button" data-preset="media">新闻传播示例</button>
+            <button type="button" data-preset="cs">计算机示例</button>
+          </div>
+
+          <label>专业<input name="major" placeholder="例如：新闻传播学、计算机科学、工商管理" /></label>
+          <label>
+            年级
+            <select name="grade">
+              <option>大一/课程论文</option>
+              <option>大二/课程论文</option>
+              <option>大三/学年论文</option>
+              <option>大四/毕业论文</option>
+              <option>研究生/课程论文</option>
+            </select>
+          </label>
+          <label>想做方向<input name="direction" placeholder="例如：AIGC 对短视频内容生产的影响" /></label>
+          <label>
+            论文/项目类型
+            <select name="paper_type">
+              <option>课程论文</option>
+              <option>毕业论文</option>
+              <option>创新创业项目</option>
+              <option>社会调查报告</option>
+              <option>竞赛项目</option>
+            </select>
+          </label>
+          <label>
+            研究偏好
+            <select name="preference">
+              <option>问卷调查，容易落地</option>
+              <option>访谈研究，适合小样本</option>
+              <option>案例分析，适合材料型论文</option>
+              <option>数据分析，想做得更硬核</option>
+              <option>产品设计，想做原型展示</option>
+            </select>
+          </label>
+          <label>关键词<input name="keywords" placeholder="例如：AIGC、短视频、大学生、内容生产" /></label>
+          <label class="wide">补充说明<textarea name="extra_info" placeholder="例如：老师要求有文献综述，最好能做问卷，不想太难"></textarea></label>
+          <button class="primary" type="submit" id="submitBtn">生成我的选题方案</button>
+        </form>
+
+        <section class="result-card">
+          <div class="section-title split">
+            <div>
+              <h2>AI 选题方案</h2>
+              <p>会结合历史记忆，尽量避免重复和套话。</p>
+            </div>
+            <span id="modelStatus">待生成</span>
+          </div>
+          <pre id="resultBox">填写左侧信息后，选题管家会在这里生成建议。</pre>
+        </section>
+
+        <aside class="right-rail">
+          <div class="profile-card">
+            <div class="profile-avatar">管</div>
+            <h3>选题管家</h3>
+            <p>把“大方向”变成能写、能查、能答辩的题目。</p>
+            <div class="stat-row">
+              <span>历史</span><strong id="topicCount">0</strong>
+              <span>文献</span><strong id="litCount">0</strong>
+            </div>
+          </div>
+
+          <div class="history-card">
+            <div class="section-title split">
+              <div>
+                <h2>网页历史记忆</h2>
+                <p>下次生成会自动结合这些记录。</p>
+              </div>
+            </div>
+            <div class="history-actions">
+              <button type="button" id="loadHistoryBtn">刷新历史</button>
+              <button type="button" id="clearHistoryBtn">清空记忆</button>
+            </div>
+            <div id="historyList" class="history-list"></div>
+          </div>
+
+          <div class="literature-card">
+            <div class="section-title">
+              <h2>真实文献候选</h2>
+              <p>来自 Crossref/OpenAlex 或内置 DOI 核验库。</p>
+            </div>
+            <div id="literatureList" class="literature-list">生成后显示文献候选。</div>
+          </div>
+        </aside>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("topicForm");
+    const resultBox = document.getElementById("resultBox");
+    const submitBtn = document.getElementById("submitBtn");
+    const modelStatus = document.getElementById("modelStatus");
+    const literatureList = document.getElementById("literatureList");
+    const historyList = document.getElementById("historyList");
+    const topicCount = document.getElementById("topicCount");
+    const litCount = document.getElementById("litCount");
+
+    const presets = {
+      media: {
+        major: "新闻传播学",
+        grade: "大三/学年论文",
+        direction: "AIGC 对短视频内容生产的影响",
+        paper_type: "课程论文",
+        preference: "问卷调查，容易落地",
+        keywords: "AIGC、短视频、大学生、内容生产",
+        extra_info: "希望题目不要太大，能做问卷，也能找到真实参考文献。"
+      },
+      cs: {
+        major: "计算机科学与技术",
+        grade: "大四/毕业论文",
+        direction: "基于大语言模型的校园学习助手",
+        paper_type: "毕业论文",
+        preference: "产品设计，想做原型展示",
+        keywords: "大语言模型、学习助手、知识问答、校园服务",
+        extra_info: "想做一个能展示的系统，难度不要超过本科毕业设计。"
+      }
+    };
+
+    function formToObject() {
+      return Object.fromEntries(new FormData(form).entries());
+    }
+
+    function renderLiterature(items) {
+      litCount.textContent = items.length;
+      if (!items.length) {
+        literatureList.innerHTML = "<p class='empty'>没有检索到合适文献，可换关键词再试。</p>";
+        return;
+      }
+      literatureList.innerHTML = items.map((item) => `
+        <article class="lit-item">
+          <strong>${item.title}</strong>
+          <span>${item.authors} · ${item.year}</span>
+          <small>${item.journal}</small>
+          <a href="${item.url}" target="_blank" rel="noreferrer">查看 DOI/来源</a>
+        </article>
+      `).join("");
+    }
+
+    function renderHistory(items) {
+      topicCount.textContent = items.length;
+      if (!items.length) {
+        historyList.innerHTML = "<p class='empty'>暂无历史。生成一次后，这里会出现你的选题记忆。</p>";
+        return;
+      }
+      historyList.innerHTML = items.slice().reverse().map((item) => `
+        <article class="history-item">
+          <strong>${item.direction || "未填写方向"}</strong>
+          <span>${item.major || "未填写专业"} · ${item.paper_type || "未填写类型"}</span>
+          <small>${item.created_at}</small>
+          ${item.chosen_focus ? `<p>上次重点：${item.chosen_focus}</p>` : ""}
+        </article>
+      `).join("");
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.textContent = "正在生成...";
+      modelStatus.textContent = "生成中";
+      resultBox.textContent = "正在结合你的输入和历史记忆，重新推演选题...";
+
+      try {
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formToObject())
+        });
+        const data = await response.json();
+        resultBox.textContent = data.result;
+        modelStatus.textContent = data.model_status && data.model_status.startsWith("remote") ? "远程大模型" : "本地备用";
+        renderLiterature(data.literature || []);
+        renderHistory(data.history || []);
+      } catch (error) {
+        resultBox.textContent = "生成失败：" + error.message;
+        modelStatus.textContent = "出错";
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "生成我的选题方案";
+      }
+    });
+
+    document.querySelectorAll("[data-preset]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const preset = presets[button.dataset.preset];
+        Object.entries(preset).forEach(([key, value]) => {
+          const field = form.querySelector(`[name="${key}"]`);
+          if (field) field.value = value;
+        });
+      });
+    });
+
+    document.getElementById("loadHistoryBtn").addEventListener("click", async () => {
+      const response = await fetch("/api/history");
+      renderHistory(await response.json());
+    });
+
+    document.getElementById("clearHistoryBtn").addEventListener("click", async () => {
+      await fetch("/api/history", { method: "DELETE" });
+      renderHistory([]);
+    });
+
+    fetch("/api/history").then((res) => res.json()).then(renderHistory).catch(() => {});
+  </script>
+</body>
+</html>
