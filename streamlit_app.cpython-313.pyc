@@ -1,0 +1,6 @@
+# 在 Streamlit Cloud 的 App Settings → Secrets 中填写
+LLM_PROVIDER="ZhipuAI"
+LLM_API_KEY="你的智谱APIKey"
+LLM_BASE_URL="https://open.bigmodel.cn/api/paas/v4/"
+LLM_MODEL="glm-4-flash"
+ENABLE_LIVE_LITERATURE="false"
